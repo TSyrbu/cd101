@@ -28,4 +28,4 @@ for idx, val in enumerate(names):
     print(f"User {idx}: {val}, {ages[idx]}")
     average_age = (average_age + ages[idx])
 
-print(average_age / len(ages))
+print(average_age/len(ages))
