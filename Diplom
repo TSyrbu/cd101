@@ -1,0 +1,224 @@
+import cv2
+import numpy as np
+
+import time
+import xlsxwriter as xw
+
+from PyQt5 import QtWidgets, uic
+from PyQt5.QtSerialPort import QSerialPort, QSerialPortInfo
+from PyQt5.QtCore import QIODevice
+from pyqtgraph import PlotWidget
+import pyqtgraph as pg
+import sys
+
+textM = ''
+
+def circle(image):
+    global k
+    global z
+    #global textOut
+
+    img = cv2.medianBlur(image, 5)
+    cimg = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+
+    # for j in range(5):
+    #    worksheet.write(k, 0, k)
+    #    worksheet.write(k, 1, k)
+    #    k += 1
+
+    circles = cv2.HoughCircles(cimg, cv2.HOUGH_GRADIENT, 1, 10,
+                               param1=50, param2=30, minRadius=0, maxRadius=20)
+
+    # print('circles: ', circles)
+    if circles is None:
+        return image
+    circles = np.uint16(np.around(circles))
+    for i in circles[0, :]:
+        # draw the outer circle
+        # print (k)
+        image1 = cv2.circle(img, (i[0], i[1]), i[2], (0, 255, 0), 2)
+        # time.sleep(1)
+        print('Координаты центра круга:', i[0], i[1])
+
+        x.append(i[0])
+        y.append(i[1])
+        worksheet.write(k, 0, i[0])
+        worksheet.write(k, 1, i[1])
+
+        worksheet.write(k, 2, int(i[0]) - int(x[0]))
+        worksheet.write(k, 3, int(i[1]) - int(y[0]))
+        k += 1
+
+        # draw the center of the circle
+        images = cv2.circle(image1, (i[0], i[1]), 2, (0, 0, 255), 3)
+
+        # chart = workbook.add_chart({'type': 'line'})
+        # chart.add_series({
+        #     'categories': '=Sheet1!$C$2:$C$' + str(z),
+        #     'values': '=Sheet1!$D$2:$D$' + str(z),
+        #     'line': {'none': True},
+        #     'marker': {'type': 'automatic'},
+        # })
+
+        # chart.set_title({'name': 'Зависимость линейного расширения от температуры'})
+        # chart.set_x_axis({'name': 'Смещение по x'})
+        # chart.set_y_axis({'name': 'Смещение по y'})
+
+        # worksheet.insert_chart('F2', chart)
+
+    return images
+
+def onOpen():
+    serial.setPortName(ui.comL.currentText())
+    serial.open(QIODevice.ReadWrite)
+
+def onClose():
+    serial.close()
+
+def onRead():
+    rx = serial.readLine()
+    rxs = str(rx, 'utf-8').strip()
+    data = rxs.split(',')
+    if data[0] == '0':
+        ui.tempB.setValue(int(float(data[1])))
+        ui.tempL.setText(data[1])
+
+
+
+def serialSend(data):
+    txs = ""
+    for val in data:
+        txs += str(val)
+        txs += ','
+    txs = txs[:-1]
+    txs += ';'
+    serial.write(txs.encode())
+
+
+def laserControl(val):
+    if val == 2: val = 1
+    serialSend([0, val])
+
+def Start(val):
+    if val == 2: val = 1
+    serialSend([1, val])
+
+
+
+def Camera(val): 
+    while val == 2:
+        ret, img = cap.read()
+        # y_size = img.shape[0]
+        # x_size = img.shape[1]
+        
+        # #обрезание области
+        # x1 = int(x_size/3)
+        # x2 = int(1-x_size/3)
+        # y1 = int(y_size/3)
+        # y2 = int(1-y_size/3)
+        # img_cropped = img[y1:y2, x1:x2]
+        # zoom_factor = 1.5
+        # #изменение размера изображение в зависимости от фактора
+        # frame = cv2.resize(img_cropped, None, fx = zoom_factor, fy = zoom_factor)
+        # cv2.imwrite('im2.png',frame)
+
+        if not ret:
+            print('video read error')
+
+        frame = circle(img)
+        # show a frame
+        cv2.imshow("capture", frame)
+
+        if cv2.waitKey(1) & 0xFF == ord('q'):
+            val=1
+            break
+ 
+
+
+def sendText(textIn):
+    global textM
+    textM = (ui.textM.toPlainText())
+    ts = (ui.textTS.toPlainText())
+    tf = (ui.textTF.toPlainText())
+    v = (ui.textV.toPlainText())
+    serialSend(
+        [2, ts, tf, v])
+    print(textM)
+
+    #return ui.textM.toPlainText()
+
+
+
+
+if __name__ == '__main__':
+    cap = cv2.VideoCapture(0)
+
+    app = QtWidgets.QApplication([])
+    ui = uic.loadUi("dilatometr.ui")
+    ui.setWindowTitle("Управление дилатометром")
+
+    #textM = ''
+    ts = 0
+    tf = 0
+    v = 0
+    k = 1
+    z = 1
+    x = []
+    y = []
+    temp = []
+
+        
+    serial = QSerialPort()
+    serial.setBaudRate(115200)
+    portList = []
+    ports = QSerialPortInfo().availablePorts()
+    for port in ports:
+        portList.append(port.portName())
+    ui.comL.addItems(portList)
+
+
+    ui.b_open.clicked.connect(onOpen)
+    ui.b_close.clicked.connect(onClose)
+    serial.readyRead.connect(onRead)
+    ui.laserCB.stateChanged.connect(laserControl)
+    ui.startCB.stateChanged.connect(Start)
+
+    ui.b_save.clicked.connect(sendText)
+
+
+    #textM = "yo"
+    #global textM
+    #workbook = xw.Workbook(f'{text}.xlsx')
+    workbook = xw.Workbook('name.xlsx')
+    worksheet = workbook.add_worksheet()
+
+    worksheet.write(0, 0, 'X')
+    worksheet.write(0, 1, 'Y')
+     
+
+    ui.camera.stateChanged.connect(Camera) 
+
+        
+
+    z = len(x)
+    print(z)
+
+    chart = workbook.add_chart({'type': 'line'})
+    chart.add_series({
+       'categories': '=Sheet1!$C$2:$C'+str(z),
+       'values': '=Sheet1!$D$2:$D$' +str(z),
+       'line': {'none': True},
+       'marker': {'type': 'automatic'},
+    })
+
+    chart.set_title({'name': 'Зависимость линейного расширения от температуры'})
+    chart.set_x_axis({'name': 'Смещение по x'})
+    chart.set_y_axis({'name': 'Смещение по y'})
+
+    worksheet.insert_chart('F2', chart)
+
+    workbook.close()
+    ui.show()
+
+    app.exec()
+    cap.release()
